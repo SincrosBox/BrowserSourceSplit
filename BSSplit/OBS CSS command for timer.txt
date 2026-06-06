@@ -1,0 +1,2 @@
+CSS command for timer: 
+.box { background: rgba(0, 0, 0, 0.4) !important; border: 1px solid #333; }

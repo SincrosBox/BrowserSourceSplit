@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { font-family:'Courier New',monospace; color:#fff; background:transparent; margin:0; padding:10px; width:320px; box-sizing:border-box; }
+.box { background:rgba(0,0,0,0.85); padding:12px; border-radius:6px; }
+.cfg { background:#222; padding:8px; border-radius:4px; margin-bottom:10px; font-size:11px; }
+.row { display:flex; justify-content:space-between; margin-bottom:6px; align-items:center; gap:4px; }
+input, button { background:#333; border:1px solid #555; color:#fff; padding:3px; border-radius:3px; font-size:11px; }
+button:hover { background:#444; }
+.game-title { font-size:16px; font-weight:bold; color:#fff; text-align:center; margin-bottom:4px; border-bottom:1px solid #444; padding-bottom:4px; }
+.timer { font-size:34px; font-weight:bold; color:#00ffcc; text-align:right; font-variant-numeric:tabular-nums; margin:4px 0 0 0; text-shadow:2px 2px #000; white-space:nowrap; }
+.timer.editable-main { cursor: pointer; border-bottom: 1px dashed #00ffcc; display: block; }
+.timer.editable-main:hover { background: #111; }
+.main-edit-input { width: 100%; background: #000; color: #00ffcc; border: 1px solid #ffffff; font-family: inherit; font-size: 30px; text-align: right; font-weight: bold; box-sizing: border-box; }
+.list { display:flex; flex-direction:column; gap:4px; max-height:450px; overflow-y:auto; font-size:14px; }
+.item { display:flex; justify-content:space-between; border-bottom:1px solid #222; padding-bottom:2px; color:#ffffff; align-items:center; }
+.item.active { color:#fff000 !important; font-weight:bold; }
+.name-container { display:flex; align-items:center; gap:6px; max-width:60%; }
+.name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.del-btn { background:none; border:none; color:#ff5555; padding:0 4px; cursor:pointer; font-size:12px; font-weight:bold; }
+.del-btn:hover { color:#ff9999; background:none; }
+.time-inputs { display:inline-flex; gap:2px; align-items:center; }
+.time-inputs input { width:28px; text-align:center; }
+.editable-time { cursor: pointer; padding: 0 2px; }
+.editable-time:hover { background: #333; }
+.time-edit-input { width: 90px; background: #111; color: #fff; border: 1px solid #00ffcc; font-family: inherit; font-size: 14px; text-align: right; }
+.storage-mgr { background:#151515; border:1px solid #444; padding:6px; border-radius:4px; margin-top:8px; font-size:10px; max-height:100px; overflow-y:auto; }
+.storage-title { font-weight:bold; color:#aaa; margin-bottom:4px; text-transform:uppercase; border-bottom:1px solid #333; }
+.storage-game-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
+.storage-name-link { cursor:pointer; text-decoration:underline; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%; }
+.storage-name-link:hover { color:#00ffcc; }
+.storage-del { background:none; border:none; color:#ff4444; cursor:pointer; font-size:9px; padding:0; text-decoration:underline; }
+.storage-del:hover { color:#ff8888; }
+.item span.time-gold { color: #ffd700 !important; font-weight: bold; text-shadow: 0 0 6px rgba(255,215,0,0.6); }
+.item span.time-green { color: #55ff55 !important; font-weight: bold; }
+.item span.time-red { color: #ff5555 !important; font-weight: bold; }
+
+.stats-panel { margin-top: 8px; border-top: 1px dashed #444; padding-top: 6px; font-size: 11px; color: #aaa; }
+.stats-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.stats-val { color: #fff; font-weight: bold; font-variant-numeric: tabular-nums; }
+</style></head>
+<body><div class="box">
+<div id="gameHeader" class="game-title" style="display:none;"></div>
+<div id="toggleRow" class="row" style="margin-bottom:8px;"><button onclick="toggleMenu()" style="background:#444; width:100%; font-weight:bold;">Hide Edit Controls (H)</button></div>
+<div class="cfg" id="configPanel">
+<div class="row">Game: <input type="text" id="gName" placeholder="e.g. Mario 64" style="width:130px;" onchange="changeGame()"><button onclick="changeGame()">Load/Set</button></div>
+<div class="row"><button id="modeBtn" onclick="toggleMode()">Mode: Count Up</button>
+<span id="durRow" style="display:none;" class="time-inputs">
+<input type="number" id="dIn" value="0" min="0" placeholder="d">d <input type="number" id="hIn" value="0" min="0" max="23" placeholder="h">h <input type="number" id="mIn" value="1" min="0" max="59" placeholder="m">m <input type="number" id="sIn" value="0" min="0" max="59" placeholder="s">s
+</span><button onclick="cycleColor()">Text Color</button></div><div class="row"><input type="text" id="sName" placeholder="Enter split name here..." style="width:130px;"><button onclick="addS()">Add Split</button><button onclick="clearS()">Clear (C)</button></div>
+<div class="storage-mgr"><div class="storage-title">Saved Profiles Database</div><div id="storageList"></div></div></div>
+<div class="list" id="list"></div>
+<div class="timer" id="disp" onclick="editMainClock()">00:00.00</div>
+
+<div class="stats-panel">
+    <div class="stats-row"><span>Best Current Run (PB):</span><span id="pbStat" class="stats-val">--:--.--</span></div>
+    <div class="stats-row"><span>Est. Best Possible:</span><span id="bptStat" class="stats-val">--:--.--</span></div>
+</div>
+</div>
+<script>
+let start=0, elapsed=0, loop=null, run=false, mode='up', msMax=60000, splits=[], pbSplits=[], idx=0, menuVisible=true, isEditingMain=false, gameId='default';
+const colorPresets=['#ffffff','#00ffff','#55ff55','#ff66cc','#ff9900']; let colorIdx=0;
+
+if(localStorage.getItem('run_current_game_id')){gameId=localStorage.getItem('run_current_game_id'); document.getElementById('gName').value=gameId==='default'?'':gameId;}
+if(localStorage.getItem('run_color_idx')){colorIdx=parseInt(localStorage.getItem('run_color_idx'));}
+
+loadGameProfile();
+
+function trackGameRegistry(id) {
+    if(id === 'default' || id.trim() === '') return;
+    let reg = []; if(localStorage.getItem('run_game_registry')){reg=JSON.parse(localStorage.getItem('run_game_registry'));}
+    reg = reg.filter(g => g.id !== id); reg.push({id: id, lastUsed: Date.now()});
+    if(reg.length > 100) { let oldest = reg.shift(); purgeSpecificGameData(oldest.id); }
+    localStorage.setItem('run_game_registry', JSON.stringify(reg)); renderStorageList();
+}
+
+function renderStorageList() {
+    const sList = document.getElementById('storageList'); if(!sList) return; sList.innerHTML = '';
+    let reg = []; if(localStorage.getItem('run_game_registry')){reg=JSON.parse(localStorage.getItem('run_game_registry'));}
+    if(reg.length === 0) { sList.innerHTML = '<div style="color:#666;">No profiles saved yet</div>'; return; }
+    reg.forEach(g => { 
+        sList.innerHTML += `<div class="storage-game-row"><span class="storage-name-link" onclick="clickToLoadGame('${g.id}')">${g.id}</span><button class="storage-del" onclick="deleteGameFromMgr('${g.id}')">[Delete]</button></div>`; 
+    });
+}
+
+function clickToLoadGame(id) {
+    gameId = id;
+    document.getElementById('gName').value = id === 'default' ? '' : id;
+    localStorage.setItem('run_current_game_id', gameId);
+    loadGameProfile();
+}
+
+function deleteGameFromMgr(id) {
+    purgeSpecificGameData(id);
+    let reg = []; if(localStorage.getItem('run_game_registry')){reg=JSON.parse(localStorage.getItem('run_game_registry'));}
+    reg = reg.filter(g => g.id !== id); localStorage.setItem('run_game_registry', JSON.stringify(reg));
+    if(gameId === id) { gameId = 'default'; document.getElementById('gName').value = ''; localStorage.setItem('run_current_game_id', 'default'); }
+    loadGameProfile();
+}
+
+function purgeSpecificGameData(id) {
+    localStorage.removeItem(`run_splits_${id}`); localStorage.removeItem(`run_pb_${id}`); localStorage.removeItem(`run_mode_${id}`);
+    localStorage.removeItem(`run_elapsed_${id}`); localStorage.removeItem(`run_msMax_${id}`); localStorage.removeItem(`run_idx_${id}`);
+    localStorage.removeItem(`run_state_running_${id}`); localStorage.removeItem(`run_system_time_${id}`);
+}
+
+function loadGameProfile() {
+    splits = []; pbSplits = []; idx = 0; elapsed = 0; run = false; clearInterval(loop); trackGameRegistry(gameId);
+    if(localStorage.getItem(`run_splits_${gameId}`)){splits=JSON.parse(localStorage.getItem(`run_splits_${gameId}`));}
+    if(localStorage.getItem(`run_pb_${gameId}`)){pbSplits=JSON.parse(localStorage.getItem(`run_pb_${gameId}`));}
+    if(localStorage.getItem(`run_mode_${gameId}`)){mode=localStorage.getItem(`run_mode_${gameId}`);} else {mode='up';}
+    if(localStorage.getItem(`run_elapsed_${gameId}`)){elapsed=parseInt(localStorage.getItem(`run_elapsed_${gameId}`));}
+    if(localStorage.getItem(`run_msMax_${gameId}`)){msMax=parseInt(localStorage.getItem(`run_msMax_${gameId}`));} else {msMax=60000;}
+    if(localStorage.getItem(`run_idx_${gameId}`)){idx=parseInt(localStorage.getItem(`run_idx_${gameId}`));}
+    if(localStorage.getItem(`run_state_running_${gameId}`)==='true'){run=true;}
+
+    const gh = document.getElementById('gameHeader');
+    if(gameId !== 'default' && gameId.trim() !== '') { gh.innerText = gameId.toUpperCase(); gh.style.display = 'block'; } else { gh.style.display = 'none'; }
+    const b=document.getElementById('modeBtn'); 
+    if(mode==='down'){b.innerText="Mode: Count Down"; document.getElementById('durRow').style.display='inline-flex';}
+    else{b.innerText="Mode: Count Up"; document.getElementById('durRow').style.display='none';}
+
+    render();
+    if(run){
+        let savedTimestamp = parseInt(localStorage.getItem(`run_system_time_${gameId}`)) || Date.now();
+        elapsed += (Date.now() - savedTimestamp); start = Date.now() - elapsed; startLoop();
+    } else { update(); }
+    renderStorageList();
+}
+
+function changeGame() { const input = document.getElementById('gName').value.trim(); gameId = input === '' ? 'default' : input; localStorage.setItem('run_current_game_id', gameId); loadGameProfile(); }
+function startLoop(){ clearInterval(loop); loop = setInterval(()=>{ elapsed = Date.now() - start; localStorage.setItem(`run_elapsed_${gameId}`, elapsed); localStorage.setItem(`run_system_time_${gameId}`, Date.now()); if(!isEditingMain) update(); }, 10); }
+function toggleMenu(){menuVisible=!menuVisible; document.getElementById('configPanel').style.display=menuVisible?'block':'none'; document.getElementById('toggleRow').style.visibility=menuVisible?'visible':'hidden'; render(); update();}
+function cycleColor(){colorIdx=(colorIdx+1)%colorPresets.length; localStorage.setItem('run_color_idx',colorIdx); render();}
+function toggleMode(){mode=(mode==='up')?'down':'up'; localStorage.setItem(`run_mode_${gameId}`, mode); const b=document.getElementById('modeBtn'); if(mode==='down'){b.innerText="Mode: Count Down"; document.getElementById('durRow').style.display='inline-flex';}else{b.innerText="Mode: Count Up"; document.getElementById('durRow').style.display='none';} resetT();}
+function addS(){const i=document.getElementById('sName'); if(!i.value.trim())return; splits.push({name:i.value.trim(),time:'--:--.--',rawMs:null}); i.value=''; render(); save(); i.focus();}
+function removeS(idx_in){splits.splice(idx_in,1); if(idx>idx_in)idx--; if(idx>=splits.length)idx=Math.max(0,splits.length-1); render(); save();}
+function clearS(){splits=[]; pbSplits=[]; idx=0; localStorage.removeItem(`run_pb_${gameId}`); render(); save(); resetT();} 
+function save(){ localStorage.setItem(`run_splits_${gameId}`, JSON.stringify(splits)); localStorage.setItem(`run_idx_${gameId}`, idx); localStorage.setItem(`run_elapsed_${gameId}`, elapsed); localStorage.setItem(`run_msMax_${gameId}`, msMax); localStorage.setItem(`run_state_running_${gameId}`, run); renderStorageList(); }
+
+function parseToMs(str) {
+    let ms = 0, days = 0, parts = str.trim().split(' ');
+    if (parts.length > 1 && parts.includes('d')) { days = parseFloat(parts.replace('d', '')) || 0; str = parts.slice(1).join(' '); }
+    let timeParts = str.split(':');
+    if(timeParts.length === 3) { ms += (parseFloat(timeParts[0]) * 3600) + (parseFloat(timeParts[1]) * 60) + parseFloat(timeParts[2]); }
+    else if(timeParts.length === 2) { ms += (parseFloat(timeParts[0]) * 60) + parseFloat(timeParts[1]); }
+    else { ms += parseFloat(timeParts[0]) || 0; }
+    return Math.floor((ms + (days * 86400)) * 1000);
+}
+
+function editTime(i) {
+    if(!menuVisible) return; const span = document.getElementById(`time-${i}`); if(span.querySelector('input')) return;
+    span.innerHTML = `<input type="text" class="time-edit-input" id="edit-in-${i}" value="${splits[i].time}">`;
+    const input = document.getElementById(`edit-in-${i}`); input.focus(); input.select();
+    const finishEdit = () => { splits[i].time = input.value.trim() || '--:--.--'; splits[i].rawMs = splits[i].time !== '--:--.--' ? parseToMs(splits[i].time) : null; render(); save(); };
+    input.addEventListener('blur', finishEdit); input.addEventListener('keydown', (e) => { if(e.key === 'Enter') finishEdit(); if(e.key === 'Escape') render(); });
+}
+
+function editMainClock() {
+    if(!menuVisible || isEditingMain) return; isEditingMain = true; const disp = document.getElementById('disp'); let d = mode==='up'?elapsed:msMax-elapsed;
+    disp.innerHTML = `<input type="text" class="main-edit-input" id="main-edit-in" value="${fmt(d)}">`;
+    const input = document.getElementById('main-edit-in'); input.focus(); input.select();
+    const finishMainEdit = () => { let totalMs = parseToMs(input.value); if(isNaN(totalMs) || totalMs < 0) totalMs = 0; if(mode === 'up') { elapsed = totalMs; } else { msMax = totalMs; elapsed = 0; } start = Date.now() - elapsed; isEditingMain = false; save(); update(); };
+    input.addEventListener('blur', finishMainEdit); input.addEventListener('keydown', (e) => { if(e.key === 'Enter') finishMainEdit(); if(e.key === 'Escape') { isEditingMain = false; update(); } });
+}
+
+function render(){
+    const l=document.getElementById('list'); l.innerHTML=''; const c=colorPresets[colorIdx];
+    splits.forEach((s,i)=>{
+        const a=(i===idx&&run); let timeClass = ''; let itemStyle = `style="color:${c};"`;
+        if(s.rawMs !== null && pbSplits[i] && pbSplits[i].rawMs !== null) {
+            let diff = s.rawMs - pbSplits[i].rawMs;
+            if(diff <= -15000) { timeClass = 'time-gold'; } else if(diff < -2000) { timeClass = 'time-green'; } else if(diff > 2000) { timeClass = 'time-red'; }
+        }
+        if(a) { itemStyle = ''; } const t=menuVisible?`<button class="del-btn" onclick="removeS(${i})">×</button>`:'';
+        l.innerHTML+=`<div class="item ${a?'active':''}" ${itemStyle}><div class="name-container">${t}<span class="name">${s.name}</span></div><span id="time-${i}" class="${timeClass} ${menuVisible?'editable-time':''}" onclick="editTime(${i})">${s.time}</span></div>`;
+    });
+    updateStatsDisplay();
+}
+
+function fmt(ms){if(ms<0)ms=0; let d=Math.floor(ms/86400000),h=Math.floor((ms%86400000)/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000),c=Math.floor((ms%1000)/10),mS=m.toString().padStart(2,'0'),sS=s.toString().padStart(2,'0'),cS=c.toString().padStart(2,'0'); if(d>0){return `${d}d ${h.toString().padStart(2,'0')}:${mS}:${sS}.${cS}`;}else if(h>0){return `${h.toString().padStart(2,'0')}:${mS}:${sS}.${cS}`;}else{return `${mS}:${sS}.${cS}`;} }
+function update(){ if(isEditingMain) return; let d=mode==='up'?elapsed:msMax-elapsed; if(d<=0){d=0; pauseT();} document.getElementById('disp').innerText=fmt(d); const disp=document.getElementById('disp'); if(menuVisible){disp.className="timer editable-main";}else{disp.className="timer";} }
+function startT(){if(run)return; if(mode==='down'&&elapsed===0){const d=parseFloat(document.getElementById('dIn').value)||0,h=parseFloat(document.getElementById('hIn').value)||0,m=parseFloat(document.getElementById('mIn').value)||0,s=parseFloat(document.getElementById('sIn').value)||0; msMax=((d*86400)+(h*3600)+m*60+s)*1000;} run=true; start=Date.now()-elapsed; startLoop(); render(); save();}
+function pauseT(){run=false; clearInterval(loop); render(); save();} 
+
+function resetT(){
+    if(idx >= splits.length && splits.length > 0 && splits[splits.length-1].rawMs !== null) { 
+        let isNewPB = false;
+        if(pbSplits.length === 0 || pbSplits[pbSplits.length-1].rawMs === null || splits[splits.length-1].rawMs < pbSplits[pbSplits.length-1].rawMs) { isNewPB = true; }
+        if(isNewPB) { pbSplits = JSON.parse(JSON.stringify(splits)); localStorage.setItem(`run_pb_${gameId}`, JSON.stringify(pbSplits)); }
+    }
+    run=false; clearInterval(loop); elapsed=0; idx=0; splits.forEach(s=> { s.time='--:--.--'; s.rawMs=null; }); update(); render(); save();
+}
+
+function splitT(){ if(!run||idx>=splits.length)return; let currentSplitMs = mode==='up'?elapsed:msMax-elapsed; splits[idx].time=fmt(currentSplitMs); splits[idx].rawMs=currentSplitMs; idx++; render(); save(); if(idx>=splits.length) { pauseT(); } }
+
+function updateStatsDisplay() {
+    const pbElem = document.getElementById('pbStat'); const bptElem = document.getElementById('bptStat'); if (!pbElem || !bptElem) return;
+    if(pbSplits && pbSplits.length > 0 && pbSplits[pbSplits.length - 1].rawMs !== null) { pbElem.innerText = pbSplits[pbSplits.length - 1].time; } else { pbElem.innerText = "--:--.--"; }
+    if(splits.length === 0) { bptElem.innerText = "--:--.--"; return; }
+    let accumulatedBPT = 0; let baselineRun = (pbSplits && pbSplits.length === splits.length) ? pbSplits : null;
+    for(let i = 0; i < splits.length; i++) {
+        if(i < idx && splits[i].rawMs !== null) { accumulatedBPT = splits[i].rawMs; } else {
+            let segmentDuration = 0;
+            if(baselineRun && baselineRun[i] && baselineRun[i].rawMs !== null) { let prevPBTime = (i === 0) ? 0 : baselineRun[i-1].rawMs; segmentDuration = baselineRun[i].rawMs - prevPBTime; } else { segmentDuration = 30000; }
+            accumulatedBPT += segmentDuration;
+        }
+    }
+    bptElem.innerText = fmt(accumulatedBPT);
+}
+
+document.getElementById('sName').addEventListener('keydown',(e)=>{if(e.key==='Enter'){e.preventDefault(); addS();}});
+window.addEventListener('keydown',(e)=>{if(e.target.tagName==='INPUT' || isEditingMain)return; let k=e.key.toLowerCase(); if(k==='s')startT(); else if(k==='p')pauseT(); else if(k==='r')resetT(); else if(k==='c')clearS(); else if(k==='h')toggleMenu(); else if(k===' '){e.preventDefault(); splitT();}}); update();
+</script></body></html>
