@@ -16,7 +16,8 @@ To configure your timer, interact with your OBS Browser Source window.
 
 ### Menu Configuration
 * Press **`H`** to toggle the configuration menu **On/Off**.
-* Inside the menu, you can set the **Game Name**, **Load/Set** saves, add **Custom Splits**, delete specific splits via the **`X`** button, change text colors, or use **Clear All** to reset the game data.
+* **⚠️ Important Note:** When the configuration options are hidden, all controls are completely locked. You cannot make any changes to the settings, text, or splits until you press **`H`** to unhide the menu again.
+* Inside the active menu, you can set the **Game Name**, **Load/Set** saves, add **Custom Splits**, delete specific splits via the **`X`** button, change text colors, or use **Clear All** to reset the game data.
 
 ### Timer Hotkeys
 * **`S`** — Start the timer.
